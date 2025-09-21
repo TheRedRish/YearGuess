@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>YearGuess</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+            :root {
+                --bg: #121213;
+                --text: #d7dadc;
+                --tile-border-empty: #3a3a3c;
+                --tile-border-filled: #565758;
+                --key: #818384;
+                --key-text: #fff;
+                --correct: #6aaa64;
+                --present: #c9b458;
+                --absent: #3a3a3c;
+                --divider: #2f3033;
+                --event-bg: #1a1a1b;
+            }
+            html,
+            body {
+                height: 100%;
+                margin: 0;
+            }
+            body {
+                background: var(--bg);
+                color: var(--text);
+                font-family: 'Clear Sans', 'Helvetica Neue', Arial, system-ui,
+                    -apple-system, Segoe UI, Roboto, sans-serif;
+                display: flex;
+                flex-direction: column;
+            }
+            .topbar {
+                height: 56px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-bottom: 1px solid var(--divider);
+                letter-spacing: 0.08em;
+                font-weight: 800;
+                position: relative;
+            }
+
+            .event {
+                border-bottom: 1px solid var(--divider);
+                background: var(--event-bg);
+                padding: 10px 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+            }
+            .event__label {
+                font-weight: 700;
+                margin-right: 0.5rem;
+                opacity: 0.85;
+            }
+            .event__text {
+                max-width: min(680px, 92vw);
+                line-height: 1.35;
+            }
+
+            .game {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 16px 12px 24px;
+                gap: 18px;
+            }
+
+            /* Board frame */
+            #board {
+                display: grid;
+                grid-template-rows: repeat(3, 1fr);
+                gap: 6px;
+                width: min(340px, 92vw);
+                margin-top: 6px;
+            }
+            .row {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
+            }
+            .tile {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                aspect-ratio: 1/1;
+                font-size: clamp(1.6rem, 9vw, 2.2rem);
+                font-weight: 800;
+                border: 2px solid var(--tile-border-empty);
+                color: #fff;
+                user-select: none;
+            }
+            .tile.filled {
+                border-color: var(--tile-border-filled);
+            }
+            .tile.correct {
+                background: var(--correct);
+                border-color: var(--correct);
+            }
+            .tile.present {
+                background: var(--present);
+                border-color: var(--present);
+            }
+            .tile.absent {
+                background: var(--absent);
+                border-color: var(--absent);
+            }
+
+            /* Keyboard */
+            #keyboard {
+                display: grid;
+                gap: 8px;
+                width: min(520px, 96vw);
+            }
+            .keyrow {
+                display: flex;
+                gap: 6px;
+                justify-content: center;
+            }
+            .key {
+                background: var(--key);
+                color: var(--key-text);
+                font-weight: 700;
+                padding: 14px 10px;
+                border-radius: 4px;
+                text-align: center;
+                min-width: 38px;
+                user-select: none;
+            }
+            .wide {
+                min-width: 72px;
+                padding: 14px 14px;
+            }
+            .key.absent {
+                background: var(--absent);
+            }
+            .key.present {
+                background: var(--present);
+            }
+            .key.correct {
+                background: var(--correct);
+            }
+
+            /* Overlay */
+            .modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: none; /* hidden by default */
+                justify-content: center;
+                align-items: center;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 9999;
+            }
+
+            /* Show when active */
+            .modal.show {
+                display: flex;
+            }
+
+            /* Box */
+            .modal-content {
+                background: #1a1a1b; /* matches your dark theme */
+                color: #d7dadc;
+                padding: 20px 24px;
+                border-radius: 8px;
+                max-width: 320px;
+                width: 90%;
+                text-align: center;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            }
+
+            /* Button */
+            .modal-content button {
+                margin-top: 16px;
+                padding: 10px 16px;
+                border: none;
+                border-radius: 4px;
+                background: #6aaa64; /* green like Wordle correct */
+                color: white;
+                font-weight: bold;
+                cursor: pointer;
+            }
+            .modal-content button:hover {
+                background: #5c9459;
+            }
+        </style>
+    </head>
+    <body>
+        <header class="topbar" aria-label="Game header">
+            YEARGUESS
+        </header>
+
+        <!-- Event banner -->
+        <div class="event" role="region" aria-label="Event">
+            <span class="event__label">EVENT:</span>
+            <span class="event__text" id="eventText">Loading event...</span>
+        </div>
+
+        <!-- Game area -->
+        <main class="game" role="main" aria-label="Guess the 4-digit year">
+            <section id="board" aria-live="polite"></section>
+            <section
+                id="keyboard"
+                aria-label="On-screen numeric keyboard"
+            ></section>
+        </main>
+
+        <!-- Popup HTML -->
+        <div id="gameOverModal" class="modal">
+            <div class="modal-content">
+                <h2 id="modalTitle">Game Over</h2>
+                <p id="modalMessage">The correct year was 1969 🚀</p>
+                <button id="closeModal">Close</button>
+            </div>
+        </div>
+
+        <script>
+            // ------- Config -------
+            const MAX_GUESSES = 3;
+            const COLS = 4; // Digits per guess
+            const ROWS = MAX_GUESSES; // Number of guesses
+
+            // On-screen keyboard layout
+            const KEYS = [
+                ['1', '2', '3', '4', '5'],
+                ['6', '7', '8', '9', '0'],
+                ['ENTER', 'BACK'],
+            ];
+
+            // ------- State -------
+            const boardEl = document.getElementById('board');
+            const keyboardEl = document.getElementById('keyboard');
+            let grid = []; // 2D array of tile elements
+            let rowIndex = 0; // Current row we are filling
+            let colIndex = 0; // Current column we are filling
+
+            let popupVisible = false;
+
+            // ------- Build Board -------
+            function buildBoard() {
+                boardEl.innerHTML = '';
+                grid = [];
+                for (let r = 0; r < ROWS; r++) {
+                    const row = document.createElement('div');
+                    row.className = 'row';
+                    const rowTiles = [];
+                    for (let c = 0; c < COLS; c++) {
+                        const tile = document.createElement('div');
+                        tile.className = 'tile';
+                        row.appendChild(tile);
+                        rowTiles.push(tile);
+                    }
+                    boardEl.appendChild(row);
+                    grid.push(rowTiles);
+                }
+            }
+
+            // ------- Build Keyboard -------
+            function buildKeyboard() {
+                keyboardEl.innerHTML = '';
+                KEYS.forEach((arr, i) => {
+                    const row = document.createElement('div');
+                    row.className = 'keyrow';
+                    arr.forEach((k) => {
+                        const key = document.createElement('div');
+                        key.className = 'key' + (k.length > 1 ? ' wide' : '');
+                        key.textContent = k === 'BACK' ? '⌫' : k;
+                        key.dataset.key = k;
+                        key.addEventListener('click', () => handleInput(k));
+                        row.appendChild(key);
+                    });
+                    keyboardEl.appendChild(row);
+                });
+            }
+
+            // ------- Input Handling -------
+            async function handleInput(k) {
+                if (rowIndex >= ROWS) return; // game over / locked
+
+                if (/^\d$/.test(k)) {
+                    if (colIndex < COLS) {
+                        const tile = grid[rowIndex][colIndex];
+                        tile.textContent = k;
+                        tile.classList.add('filled');
+                        colIndex++;
+                    }
+                    return;
+                }
+
+                if (k === 'BACK') {
+                    if (colIndex > 0) {
+                        colIndex--;
+                        const tile = grid[rowIndex][colIndex];
+                        tile.textContent = '';
+                        tile.classList.remove(
+                            'filled',
+                            'correct',
+                            'present',
+                            'absent'
+                        );
+                    }
+                    return;
+                }
+
+                if (k === 'ENTER') {
+                    if (colIndex < COLS) return; // row not complete
+                    const guess = grid[rowIndex]
+                        .map((t) => t.textContent)
+                        .join('');
+                    const feedback = await getFeedback(guess);
+
+                    applyFeedback(rowIndex, feedback.marks);
+                    rowIndex++; // Go to new row
+                    if (rowIndex >= ROWS || feedback.allCorrect) {
+                        await gameOver(feedback);
+                    }
+                    colIndex = 0;
+                }
+            }
+
+            // Keyboard: physical keys
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && popupVisible) toggleGameOverModel();
+                else if (e.key === 'Enter') handleInput('ENTER');
+                else if (e.key === 'Backspace') handleInput('BACK');
+                else if (/^\d$/.test(e.key)) handleInput(e.key);
+            });
+
+            // ------- Game Over Modal -------
+            function toggleGameOverModel() {
+                const modal = document.getElementById('gameOverModal');
+                popupVisible
+                    ? modal.classList.remove('show')
+                    : modal.classList.add('show');
+                popupVisible = !popupVisible;
+            }
+
+            document
+                .getElementById('closeModal')
+                .addEventListener('click', () => {
+                    toggleGameOverModel();
+                });
+
+            // ------- Apply feedback colors to a row -------
+            function applyFeedback(r, marks) {
+                marks.slice(0, COLS).forEach((state, i) => {
+                    const tile = grid[r][i];
+                    tile.classList.remove('correct', 'present', 'absent');
+                    if (state) tile.classList.add(state);
+                });
+            }
+
+            async function getFeedback(guess) {
+                return fetch(`/guess/${guess}`)
+                    .then((res) => res.json())
+                    .then((data) => data);
+            }
+
+            async function loadRoundData() {
+                try {
+                    const event = await getEvent();
+
+                    document.getElementById('eventText').textContent =
+                        event.text;
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            async function getEvent() {
+                try {
+                    const res = await fetch('/event');
+                    const data = await res.json();
+                    return data.event;
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            async function gameOver(feedback) {
+                const event = await getEvent();
+                if (
+                    feedback.marks.includes('present') ||
+                    feedback.marks.includes('absent')
+                ) {
+                    document.getElementById('modalTitle').textContent =
+                        'Game over - you lose - newb!';
+                    document.getElementById(
+                        'modalMessage'
+                    ).textContent = `The correct year was ${event.year} 🚀`;
+                    toggleGameOverModel();
+                } else {
+                    document.getElementById('modalTitle').textContent =
+                        'Game over - you win!';
+                    document.getElementById(
+                        'modalMessage'
+                    ).textContent = `The correct year was ${event.year} 🚀`;
+                    toggleGameOverModel();
+                }
+            }
+
+            buildBoard();
+            buildKeyboard();
+
+            // ------- Init -------
+            loadRoundData();
+        </script>
+    </body>
+</html>
