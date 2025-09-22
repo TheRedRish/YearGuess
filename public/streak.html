@@ -44,16 +44,22 @@
             }
 
             .header-left {
-                position: absolute;
-                left: 12px;
+                flex: 1;
                 display: flex;
-                gap: 16px;
                 align-items: center;
             }
 
             .header-center {
                 flex: 1;
                 text-align: center;
+            }
+
+            .streakbar {
+                flex: 1;
+                display: flex;
+                justify-content: flex-end;
+                gap: 16px;
+                align-items: center;
             }
 
             .mode-link {
@@ -67,6 +73,30 @@
             }
             .mode-link:hover {
                 background: rgba(96, 165, 250, 0.15);
+            }
+
+            .streak-pill {
+                display: inline-flex;
+                align-items: baseline;
+                gap: 6px;
+                padding: 6px 10px;
+                border: 1px solid var(--tile-border-empty);
+                border-radius: 20px;
+                background: #1b1c1e;
+                box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+            }
+
+            .streak-label {
+                font-size: 0.85rem;
+                color: #b7bcc0; /* muted */
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            .streak-value {
+                font-weight: 800;
+                color: #ffffff;
+                font-variant-numeric: tabular-nums; /* keeps numbers from shifting */
             }
 
             .event {
@@ -222,9 +252,19 @@
     <body>
         <header class="topbar" aria-label="Game header">
             <div class="header-left">
-                <a href="/streak" class="mode-link">Streak Mode</a>
+                <a href="/" class="mode-link">Daily Mode</a>
             </div>
             <div class="header-center">YEARGUESS</div>
+            <div class="streakbar">
+                <div class="streak-pill">
+                    <span class="streak-label">Streak</span>
+                    <span class="streak-value" id="streakCurrent">4</span>
+                </div>
+                <div class="streak-pill">
+                    <span class="streak-label">Best</span>
+                    <span class="streak-value" id="streakBest">12</span>
+                </div>
+            </div>
         </header>
 
         <!-- Event banner -->
@@ -272,6 +312,11 @@
             let colIndex = 0; // Current column we are filling
 
             let popupVisible = false;
+
+            let eventsIndex = 0;
+            let streakCurrent = 0;
+            let streakBest = Number(localStorage.getItem('streakBest')) || 0;
+            let events = [];
 
             // ------- Build Board -------
             function buildBoard() {
@@ -396,34 +441,48 @@
             }
 
             async function getFeedback(guess) {
-                return fetch(`/guess/${guess}`)
+                return fetch(
+                    `/guess/streak/${guess}/${events[eventsIndex].year}`
+                )
                     .then((res) => res.json())
                     .then((data) => data);
             }
 
             async function loadRoundData() {
                 try {
-                    const event = await getDailyEvent();
+                    updateStreakCounter();
+
+                    events = await getEvents();
 
                     document.getElementById('eventText').textContent =
-                        event.text;
+                        events[eventsIndex].text;
                 } catch (error) {
                     console.error(error);
                 }
             }
 
-            async function getDailyEvent() {
+            function updateStreakCounter() {
+                document.getElementById('streakCurrent').textContent =
+                    streakCurrent;
+                if (streakBest < streakCurrent) {
+                    streakBest = streakCurrent;
+                    localStorage.setItem('streakBest', streakBest);
+                }
+                document.getElementById('streakBest').textContent = streakBest;
+            }
+
+            async function getEvents() {
                 try {
-                    const res = await fetch('/daily-event');
+                    const res = await fetch('/events');
                     const data = await res.json();
-                    return data.event;
+                    return data.events;
                 } catch (error) {
                     console.error(error);
                 }
             }
 
             async function gameOver(feedback) {
-                const event = await getDailyEvent();
+                const event = events[eventsIndex];
                 if (
                     feedback.marks.includes('present') ||
                     feedback.marks.includes('absent')
@@ -431,11 +490,28 @@
                     const title = 'Game over - you lose - newb!';
                     const description = `The correct year was ${event.year} 🚀`;
                     toggleGameOverModel(title, description);
+                    eventsIndex = 0;
+                    streakCurrent = 0;
+                    events = await getEvents();
                 } else {
                     const title = 'Game over - you win!';
                     const description = `The correct year was ${event.year} 🚀`;
                     toggleGameOverModel(title, description);
+                    eventsIndex++;
+                    streakCurrent++;
+                    if (eventsIndex >= events.length) {
+                        // If we run out of events, get new events
+                        eventsIndex = 0;
+                        events = await getEvents();
+                    }
                 }
+
+                updateStreakCounter();
+
+                rowIndex = 0;
+                colIndex = 0;
+
+                buildBoard();
             }
 
             buildBoard();

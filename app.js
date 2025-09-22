@@ -16,6 +16,12 @@ app.get('/daily-event', async (req, res) => {
     res.send({ event: event });
 });
 
+app.get('/events', async (req, res) => {
+    const events = await getEvents(true);
+    shuffle(events);
+    res.send({ events: events });
+});
+
 app.get('/guess/:year', async (req, res) => {
     const year = req.params.year;
     if (!/^\d{4}$/.test(year)) {
@@ -26,6 +32,16 @@ app.get('/guess/:year', async (req, res) => {
         return res.send({ ...feedback });
     });
 });
+
+app.get('/guess/streak/:year/:yearToGuess', async (req, res) => {
+    const year = req.params.year;
+    if (!/^\d{4}$/.test(year)) {
+        return res.status(400).send({ error: 'Year must be a 4-digit number' });
+    }
+
+   return res.send(scoreGuess(year, req.params.yearToGuess));
+});
+
 
 async function feedback(guess) {
     return getDailyEvent().then((event) => {
@@ -83,15 +99,21 @@ function sanitizeEvents(events) {
 async function getDailyEvent() {
     const events = await getEvents();
 
-    let event = events[pickDailyIndex(data.selected.length - 1)];
+    let event = events[pickDailyIndex(events.length - 1)];
     return {
         year: event.year,
         text: event.text,
     };
 }
 
-async function getEvents() {
+async function getEvents(randomDay = false) {
     let today = new Date();
+    if (randomDay) {
+        const start = new Date('January 1, 2024'); // Using 2024 because it's a leap year
+        const end = new Date('December 31, 2024');
+        const randomDate = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+        today = randomDate;
+    }
     let month = today.getMonth() + 1; // 1-12
     let day = today.getDate(); // 1-31
     wikimediaUrl = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/selected/${month}/${day}`;
@@ -108,6 +130,23 @@ async function getEvents() {
     } catch (error) {
         console.error(error);
     }
+}
+
+
+function shuffle(array) {
+  let currentIndex = array.length;
+
+  // While there remain elements to shuffle...
+  while (currentIndex != 0) {
+
+    // Pick a remaining element...
+    let randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+
+    // And swap it with the current element.
+    [array[currentIndex], array[randomIndex]] = [
+      array[randomIndex], array[currentIndex]];
+  }
 }
 
 // GIBITTY Code to get around serverless hosting limitations
