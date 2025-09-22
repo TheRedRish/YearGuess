@@ -365,7 +365,7 @@
 
             async function loadRoundData() {
                 try {
-                    const event = await getEvent();
+                    const event = await getDailyEvent();
 
                     document.getElementById('eventText').textContent =
                         event.text;
@@ -374,9 +374,9 @@
                 }
             }
 
-            async function getEvent() {
+            async function getDailyEvent() {
                 try {
-                    const res = await fetch('/event');
+                    const res = await fetch('/daily-event');
                     const data = await res.json();
                     return data.event;
                 } catch (error) {
@@ -385,7 +385,7 @@
             }
 
             async function gameOver(feedback) {
-                const event = await getEvent();
+                const event = await getDailyEvent();
                 if (
                     feedback.marks.includes('present') ||
                     feedback.marks.includes('absent')

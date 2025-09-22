@@ -7,7 +7,11 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/YearGuess.html');
 });
 
-app.get('/event', async (req, res) => {
+app.get('/streak', (req, res) => {
+    res.sendFile(__dirname + '/public/streak.html');
+});
+
+app.get('/daily-event', async (req, res) => {
     const event = await getDailyEvent();
     res.send({ event: event });
 });
@@ -19,7 +23,7 @@ app.get('/guess/:year', async (req, res) => {
     }
 
     feedback(year).then((feedback) => {
-        return res.send({...feedback});
+        return res.send({ ...feedback });
     });
 });
 
@@ -55,7 +59,7 @@ function scoreGuess(guess, answer) {
         }
     }
 
-    return {marks: marks, allCorrect: allCorrect};
+    return { marks: marks, allCorrect: allCorrect };
 }
 
 function sanitizeEvents(events) {
@@ -77,10 +81,20 @@ function sanitizeEvents(events) {
 }
 
 async function getDailyEvent() {
+    const events = await getEvents();
+
+    let event = events[pickDailyIndex(data.selected.length - 1)];
+    return {
+        year: event.year,
+        text: event.text,
+    };
+}
+
+async function getEvents() {
     let today = new Date();
     let month = today.getMonth() + 1; // 1-12
     let day = today.getDate(); // 1-31
-    wikimediaUrl = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events/${month}/${day}`;
+    wikimediaUrl = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/selected/${month}/${day}`;
 
     try {
         const res = await fetch(wikimediaUrl, {
@@ -90,13 +104,7 @@ async function getDailyEvent() {
         });
         const data = await res.json();
 
-        const events = sanitizeEvents(data.events);
-
-        let event = events[pickDailyIndex(data.events.length - 1)];
-        return {
-            year: event.year,
-            text: event.text,
-        };
+        return sanitizeEvents(data.selected);
     } catch (error) {
         console.error(error);
     }
